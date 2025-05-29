@@ -1,0 +1,15 @@
+[project]
+name = "gvtop"
+version = "0.0.1"
+description = "🎮 Material You TUI for monitoring NVIDIA GPUs"
+dependencies = [
+    "pynvml",
+    "psutil"
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+gvtop = "gvtop.gvtop:main"
