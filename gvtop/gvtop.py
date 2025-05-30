@@ -16,6 +16,12 @@ def main():
     parser.add_argument("--interval", help="Seconds between updates", type=int, default=1)
     args=parser.parse_args()
 
+    try:
+        nvmlInit()
+    except:
+        print("Could not initialize NVML. Sorry 🥺...")
+        exit(1)
+
     GEM = os.getenv("GEM", "emerald")
     THEME = importlib.import_module("gvtop.themes."+GEM).THEME
 
@@ -28,8 +34,6 @@ def main():
 
     tty.setraw(fd)
 
-    nvmlInit()
-
     cuda = str(nvmlSystemGetCudaDriverVersion_v2())
     major = int(cuda[:2])
     minor = int(cuda[2:4])
@@ -41,9 +45,6 @@ def main():
         handles.append( nvmlDeviceGetHandleByIndex(index) )
     device_name = nvmlDeviceGetName(handles[0])
     cuda_cores = nvmlDeviceGetNumGpuCores(handles[0])
-    # clockType={0:graphics, 1:streaming multiprocessor(sm), 2:memory, 3:transcoder}
-    # clockId={0:current, 1:requested application target, 2:default application target, 3:max}
-    max_freq = nvmlDeviceGetClock(handles[0], 1, 3)
     # .total, .free, .used
     total_mem = round(nvmlDeviceGetMemoryInfo(handles[0]).total/2**30)
     max_power = round(nvmlDeviceGetEnforcedPowerLimit(handles[0])/1000)
@@ -74,7 +75,6 @@ def main():
         containers = []
         global_processes = []
         for index in range(count):
-            freq = nvmlDeviceGetClock(handles[index], 1, 0)
             used_mem = round(nvmlDeviceGetMemoryInfo(handles[index]).used/2**30)
             power = round(nvmlDeviceGetPowerUsage(handles[index])/1000)
             # .gpu, .memory
@@ -83,7 +83,7 @@ def main():
             local_processes = nvmlDeviceGetComputeRunningProcesses_v3(handles[index])
             global_processes.append(local_processes)
             
-            container = utils.GPUContainer(SCHEME, index, freq, max_freq, used_mem, total_mem, power, max_power, util, len(local_processes))
+            container = utils.GPUContainer(SCHEME, index, used_mem, total_mem, power, max_power, util, len(local_processes))
             containers.append(str(container))
         body = utils.to_grid(containers,4)
 

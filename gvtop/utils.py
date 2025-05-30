@@ -105,11 +105,9 @@ class Container():
         return string
 
 class GPUContainer(Container):
-    def __init__(self, scheme, index=0, freq=0, max_freq=1, used_mem=0, total_mem=1, power=0, max_power=1, util=0, local_processes=0):
+    def __init__(self, scheme, index=0, used_mem=0, total_mem=1, power=0, max_power=1, util=0, local_processes=0):
         self.scheme = scheme 
         self.index = index
-        self.freq = freq
-        self.max_freq = max_freq
         self.used_mem = used_mem
         self.total_mem = total_mem
         self.power = power
@@ -120,8 +118,7 @@ class GPUContainer(Container):
         background = scheme["surfaceContainerLow"]
         header = "\x1b[38;2;%s;1mGPU %d\x1b[38;2;%s;22m" % (scheme["secondary"], index, foreground)
         icon = lambda x: "\x1b[38;2;%sm%s\x1b[38;2;%sm" % (scheme["primary"], x, scheme["onSurface"])
-        content = ["%s Freq.: %14.14s %s" % (icon(" "), "%d/%d MHz" % (freq,max_freq), get_bar(freq/max_freq,scheme["tertiary"],scheme["tertiaryContainer"])),
-                   "%s  Mem.: %14.14s %s" % (icon(" "), "%d/%d GiB" % (used_mem,total_mem), get_bar(used_mem/total_mem,scheme["tertiary"],scheme["tertiaryContainer"])),
+        content = ["%s  Mem.: %14.14s %s" % (icon(" "), "%d/%d GiB" % (used_mem,total_mem), get_bar(used_mem/total_mem,scheme["tertiary"],scheme["tertiaryContainer"])),
                    "%s  Pow.: %14.14s %s" % (icon(" "), "%d/%d W" % (power,max_power), get_bar(power/max_power,scheme["tertiary"],scheme["tertiaryContainer"])),
                    "%s Util.: %14.14s %s" % (icon(" "), "%d%%" % round(util*100), get_bar(util,scheme["tertiary"],scheme["tertiaryContainer"])),
                    "%s Proc.: %14.14s %s" % (icon(" "), "%d" % local_processes, get_traffic(local_processes>0,scheme["tertiary"],scheme["tertiaryContainer"]))]
@@ -129,12 +126,12 @@ class GPUContainer(Container):
         super().__init__(foreground, background, header, content)
 
 def cleanup(fd, old_settings):
-    nvmlShutdown()
-
     termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     # Exit alternate buffer (restores some settings)
     print("\x1b[?1049l",end="",flush=True)
+
+    nvmlShutdown()
     
     print("Bye sexy 😘!")
 
