@@ -1,11 +1,15 @@
 import argparse
 import importlib
 import sys
-import termios
-import tty
 import time
 import select
 import os
+import platform
+if platform.system() == 'Windows':
+    import msvcrt
+else:
+    import termios
+    import tty
 from pynvml import *
 import psutil
 import datetime
@@ -27,12 +31,13 @@ def main():
 
     fd = sys.stdin.fileno()
 
-    old_settings = termios.tcgetattr(fd)
+    old_settings = None
+    if platform.system() != 'Windows':
+        old_settings = termios.tcgetattr(fd)
+        tty.setraw(fd)
         
     # Enter alternate buffer and hide cursor
     print("\x1b[?1049h\x1b[?25l",end="",flush=True)
-
-    tty.setraw(fd)
 
     cuda = str(nvmlSystemGetCudaDriverVersion_v2())
     major = int(cuda[:2])
@@ -110,12 +115,16 @@ def main():
 
         start = time.time()
         while time.time()-start < args.interval:
-            # rlist, wlist, xlist=select.select(rlist, wlist, xlist, timeout=None/blocking)
-            if select.select([sys.stdin], [], [], 0)[0]:
-                byte = os.read(fd, 1)
-                # CTRL+c=3/ETX
-                if byte in [b"\x1b", b"q", b"\x03"]:
-                    utils.cleanup(fd, old_settings)
+            if platform.system() == 'Windows':
+                if msvcrt.kbhit():
+                    byte = msvcrt.getch()
+                    if byte in [b"\x1b", b"q", b"\x03"]:  # ESC, q, CTRL+C
+                        utils.cleanup(fd, old_settings)
+            else:
+                if select.select([sys.stdin], [], [], 0)[0]:
+                    byte = os.read(fd, 1)
+                    if byte in [b"\x1b", b"q", b"\x03"]:  # ESC, q, CTRL+C
+                        utils.cleanup(fd, old_settings)
 
 if __name__ == "__main__":
     main()
