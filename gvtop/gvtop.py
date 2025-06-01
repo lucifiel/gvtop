@@ -3,11 +3,25 @@ import importlib
 import time
 import os
 import platform
+import sys
 from pynvml import *
 import psutil
 import datetime
 from . import utils
 from .windows_terminal import get_terminal, WindowsGpuMonitor
+
+def get_input(timeout):
+    """Platform-independent input handling"""
+    if platform.system() == 'Windows':
+        import msvcrt
+        if msvcrt.kbhit():
+            return msvcrt.getch()
+    else:
+        import select
+        import sys
+        if select.select([sys.stdin], [], [], timeout)[0]:
+            return sys.stdin.read(1)
+    return None
 
 class GVTopUI:
     def __init__(self):
@@ -58,10 +72,6 @@ class GVTopUI:
 
         self.loop.set_alarm_in(interval, refresh)
         self.loop.run()
-from pynvml import *
-import psutil
-import datetime
-from . import utils
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -181,6 +191,8 @@ def main():
         start = time.time()
         while time.time()-start < args.interval:
             if get_input(args.interval - (time.time()-start)):
+                if nvml_initialized:
+                    nvmlShutdown()
                 utils.cleanup()
                 break
 
