@@ -7,8 +7,6 @@ import os
 import platform
 if platform.system() == 'Windows':
     import msvcrt
-    import ctypes
-    import ctypes.wintypes
 else:
     import termios
     import tty
@@ -60,12 +58,9 @@ def main():
         if platform.system() == 'Windows':
             # Default to dark mode on Windows
             mode = "dark"
-            # Enable ANSI escape sequences
-            kernel32 = ctypes.windll.kernel32
-            STD_OUTPUT_HANDLE = -11
-            ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-            handle = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
-            kernel32.SetConsoleMode(handle, ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+            # Enable ANSI escape sequences for older Windows versions
+            if sys.getwindowsversion().build < 10586:  # Pre-TH2 (build 10586)
+                os.system('')  # Enable ANSI support
         else:
             # Dark mode ANSI DSR (https://contour-terminal.org/vt-extensions/color-palette-update-notifications/)
             print("\x1b[?996n",end="",flush=True)
