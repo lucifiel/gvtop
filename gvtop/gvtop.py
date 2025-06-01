@@ -2,11 +2,12 @@ import argparse
 import importlib
 import time
 import os
-import urwid
+import platform
 from pynvml import *
 import psutil
 import datetime
 from . import utils
+from .windows_terminal import get_terminal, WindowsGpuMonitor
 
 class GVTopUI:
     def __init__(self):
@@ -26,11 +27,18 @@ class GVTopUI:
         self.loop = None
 
     def update_screen(self, header, body, footer):
-        self.header_text.set_text(header)
-        self.body_text.set_text(body)
-        self.footer_text.set_text(footer)
-        if self.loop:
-            self.loop.draw_screen()
+        """Update screen using platform-appropriate method"""
+        if platform.system() == 'Windows':
+            term = get_terminal()
+            with term.fullscreen(), term.hidden_cursor():
+                print(term.clear(), end='')
+                print(header + body + footer, end='', flush=True)
+        else:
+            self.header_text.set_text(header)
+            self.body_text.set_text(body)
+            self.footer_text.set_text(footer)
+            if self.loop:
+                self.loop.draw_screen()
 
     def run(self, interval, update_callback):
         def input_handler(key):
@@ -60,11 +68,18 @@ def main():
     parser.add_argument("--interval", help="Seconds between updates", type=int, default=1)
     args=parser.parse_args()
 
-    try:
-        nvmlInit()
-    except:
-        print("Could not initialize NVML. Sorry 🥺...")
-        exit(1)
+    gpu_monitor = None
+    if platform.system() == 'Windows':
+        try:
+            gpu_monitor = WindowsGpuMonitor()
+        except:
+            print("Warning: Could not initialize WMI GPU monitoring")
+    else:
+        try:
+            nvmlInit()
+        except:
+            print("Could not initialize NVML. Sorry 🥺...")
+            exit(1)
 
     GEM = os.getenv("GEM", "emerald")
     THEME = importlib.import_module("gvtop.themes."+GEM).THEME
@@ -87,19 +102,27 @@ def main():
     max_power = round(nvmlDeviceGetEnforcedPowerLimit(handles[0])/1000)
 
     while True:
-        # Default to dark mode (blessed handles ANSI support)
+        # Default to dark mode
         mode = "dark"
         SCHEME = THEME[mode]
         
+        # Get GPU info from appropriate source
+        if platform.system() == 'Windows' and gpu_monitor:
+            gpu_name = gpu_monitor.gpu_info['name']
+            gpu_mem = gpu_monitor.gpu_info['memory']
+        else:
+            gpu_name = device_name
+            gpu_mem = total_mem
+            
         icon = lambda x: "\x1b[38;2;%sm%s\x1b[39m" % (SCHEME["primary"], x)
         key = lambda x: "\x1b[38;2;%s;49m▐\x1b[38;2;%s;48;2;%sm%s\x1b[38;2;%s;49m▌\x1b[39;49m" % (SCHEME["error"],SCHEME["onError"],SCHEME["error"],x,SCHEME["error"])
-        first_line = '\x1b[38;2;%s;1m%s\x1b[39;22m' % (SCHEME["secondary"],device_name)
+        first_line = '\x1b[38;2;%s;1m%s\x1b[39;22m' % (SCHEME["secondary"],gpu_name)
         tip = "Close with%s/%s/%s+%s" % (key("ESC"),key("q"),key("CTRL"),key("c"))
         extra_spaces = os.get_terminal_size().columns - utils.ansi_len(first_line) - utils.ansi_len(tip)
         first_line = first_line + " "*extra_spaces + tip + "\n"
         header = (first_line +
                   '%s Cores: %8.8s\n' % (icon(" "),cuda_cores)+
-                  '%s  Mem.: %8.8s\n' % (icon(" "),"%d GiB" % total_mem) +
+                  '%s  Mem.: %8.8s\n' % (icon(" "),"%d GiB" % gpu_mem) +
                   '%s  Pow.: %8.8s\n' % (icon(" "),"%d W" % max_power) +
                   '%s  CUDA: %8.8s' % (icon(" "),"≤ %d.%d" % (major,minor)))
         
