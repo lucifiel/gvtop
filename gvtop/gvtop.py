@@ -1,10 +1,12 @@
 import argparse
 import importlib
-import sys
 import time
-import select
 import os
 from blessed import Terminal
+from pynvml import *
+import psutil
+import datetime
+from . import utils
 
 term = Terminal()
 
@@ -15,6 +17,14 @@ def update_screen(lines):
         print(term.clear(), end='')
         for line in lines:
             print(line)
+
+def get_input(timeout):
+    """Cross-platform input handling"""
+    with term.cbreak():
+        inp = term.inkey(timeout=timeout)
+        if inp in ('\x1b', 'q', '\x03'):  # ESC, q, CTRL+C
+            return True
+    return False
 from pynvml import *
 import psutil
 import datetime
@@ -34,15 +44,7 @@ def main():
     GEM = os.getenv("GEM", "emerald")
     THEME = importlib.import_module("gvtop.themes."+GEM).THEME
 
-    fd = sys.stdin.fileno()
-
-    old_settings = None
-    if platform.system() != 'Windows':
-        old_settings = termios.tcgetattr(fd)
-        tty.setraw(fd)
-        
-    # Enter alternate buffer and hide cursor
-    print("\x1b[?1049h\x1b[?25l",end="",flush=True)
+    # Enter alternate buffer and hide cursor handled by blessed
 
     cuda = str(nvmlSystemGetCudaDriverVersion_v2())
     major = int(cuda[:2])
@@ -60,21 +62,8 @@ def main():
     max_power = round(nvmlDeviceGetEnforcedPowerLimit(handles[0])/1000)
 
     while True:
-        if platform.system() == 'Windows':
-            # Default to dark mode on Windows
-            mode = "dark"
-            # Enable ANSI escape sequences for older Windows versions
-            if sys.getwindowsversion().build < 10586:  # Pre-TH2 (build 10586)
-                os.system('')  # Enable ANSI support
-        else:
-            # Dark mode ANSI DSR (https://contour-terminal.org/vt-extensions/color-palette-update-notifications/)
-            print("\x1b[?996n",end="",flush=True)
-            response = os.read(fd, 9)
-            if response==b"\x1b[?997;1n":
-                mode="dark"
-            elif response==b"\x1b[?997;2n":
-                mode="light"
-
+        # Default to dark mode (blessed handles ANSI support)
+        mode = "dark"
         SCHEME = THEME[mode]
         
         icon = lambda x: "\x1b[38;2;%sm%s\x1b[39m" % (SCHEME["primary"], x)
@@ -127,16 +116,9 @@ def main():
 
         start = time.time()
         while time.time()-start < args.interval:
-            if platform.system() == 'Windows':
-                if msvcrt.kbhit():
-                    byte = msvcrt.getch()
-                    if byte in [b"\x1b", b"q", b"\x03"]:  # ESC, q, CTRL+C
-                        utils.cleanup(fd, old_settings)
-            else:
-                if select.select([sys.stdin], [], [], 0)[0]:
-                    byte = os.read(fd, 1)
-                    if byte in [b"\x1b", b"q", b"\x03"]:  # ESC, q, CTRL+C
-                        utils.cleanup(fd, old_settings)
+            if get_input(args.interval - (time.time()-start)):
+                utils.cleanup()
+                break
 
 if __name__ == "__main__":
     main()
