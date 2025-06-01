@@ -1,15 +1,35 @@
 import argparse
 import importlib
 import sys
-import termios
-import tty
 import time
 import select
 import os
+import platform
 from pynvml import *
 import psutil
 import datetime
 from . import utils
+
+is_windows = platform.system() == 'Windows'
+
+if is_windows:
+    import colorama
+    colorama.init()
+    import ctypes
+    from ctypes import wintypes
+    
+    # Enable Windows VT processing
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    STD_OUTPUT_HANDLE = -11
+    ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+    
+    hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+    mode = wintypes.DWORD()
+    kernel32.GetConsoleMode(hOut, ctypes.byref(mode))
+    kernel32.SetConsoleMode(hOut, mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+else:
+    import termios
+    import tty
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -27,12 +47,14 @@ def main():
 
     fd = sys.stdin.fileno()
 
-    old_settings = termios.tcgetattr(fd)
-        
-    # Enter alternate buffer and hide cursor
-    print("\x1b[?1049h\x1b[?25l",end="",flush=True)
-
-    tty.setraw(fd)
+    if is_windows:
+        old_settings = None
+        # Windows Terminal already supports alternate buffer
+        print("\x1b[?1049h\x1b[?25l", end="", flush=True)
+    else:
+        old_settings = termios.tcgetattr(fd)
+        print("\x1b[?1049h\x1b[?25l", end="", flush=True)
+        tty.setraw(fd)
 
     cuda = str(nvmlSystemGetCudaDriverVersion_v2())
     major = int(cuda[:2])
@@ -111,11 +133,17 @@ def main():
         start = time.time()
         while time.time()-start < args.interval:
             # rlist, wlist, xlist=select.select(rlist, wlist, xlist, timeout=None/blocking)
-            if select.select([sys.stdin], [], [], 0)[0]:
-                byte = os.read(fd, 1)
-                # CTRL+c=3/ETX
-                if byte in [b"\x1b", b"q", b"\x03"]:
-                    utils.cleanup(fd, old_settings)
+            if is_windows:
+                if msvcrt.kbhit():
+                    byte = msvcrt.getch()
+                    if byte in [b"\x1b", b"q", b"\x03"]:
+                        utils.cleanup(fd, old_settings)
+            else:
+                if select.select([sys.stdin], [], [], 0)[0]:
+                    byte = os.read(fd, 1)
+                    # CTRL+c=3/ETX
+                    if byte in [b"\x1b", b"q", b"\x03"]:
+                        utils.cleanup(fd, old_settings)
 
 if __name__ == "__main__":
     main()

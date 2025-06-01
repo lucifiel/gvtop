@@ -1,9 +1,16 @@
 import re
 import sys
-import termios
-import tty
+import platform
 import math
 from pynvml import *
+
+is_windows = platform.system() == 'Windows'
+
+if is_windows:
+    import colorama
+else:
+    import termios
+    import tty
 
 pattern = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -126,10 +133,14 @@ class GPUContainer(Container):
         super().__init__(foreground, background, header, content)
 
 def cleanup(fd, old_settings):
-    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    if old_settings is not None:  # Unix
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     # Exit alternate buffer (restores some settings)
-    print("\x1b[?1049l",end="",flush=True)
+    print("\x1b[?1049l", end="", flush=True)
+
+    if is_windows:
+        colorama.deinit()
 
     nvmlShutdown()
     

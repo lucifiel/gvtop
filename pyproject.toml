@@ -4,7 +4,8 @@ version = "0.0.1"
 description = "🎮 Material You TUI for monitoring NVIDIA GPUs"
 dependencies = [
     "pynvml",
-    "psutil"
+    "psutil",
+    "colorama>=0.4.6"
 ]
 
 [build-system]
