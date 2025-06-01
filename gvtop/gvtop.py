@@ -7,40 +7,6 @@ import os
 import platform
 if platform.system() == 'Windows':
     import msvcrt
-    import ctypes
-    from ctypes import wintypes
-    
-    class WindowsConsole:
-        def __init__(self):
-            self.kernel32 = ctypes.windll.kernel32
-            self.stdout = self.kernel32.GetStdHandle(-11)
-            self.prev_lines = []
-            
-            # Set up console
-            self._setup_console()
-            
-        def _setup_console(self):
-            # Enable ANSI and hide cursor
-            ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-            self.kernel32.SetConsoleMode(self.stdout, ENABLE_VIRTUAL_TERMINAL_PROCESSING)
-            
-            # Disable cursor blinking
-            class CONSOLE_CURSOR_INFO(ctypes.Structure):
-                _fields_ = [("size", ctypes.c_int),
-                           ("visible", ctypes.c_byte)]
-            cursor_info = CONSOLE_CURSOR_INFO(1, False)
-            self.kernel32.SetConsoleCursorInfo(self.stdout, ctypes.byref(cursor_info))
-            
-        def write(self, lines):
-            """Differential update of console content"""
-            for y, line in enumerate(lines):
-                if y >= len(self.prev_lines) or line != self.prev_lines[y]:
-                    # Position cursor and write line
-                    COORD = wintypes._COORD
-                    self.kernel32.SetConsoleCursorPosition(self.stdout, COORD(0, y))
-                    self.kernel32.WriteConsoleW(self.stdout, line, len(line), None, None)
-            self.prev_lines = lines.copy()
-            
 else:
     import termios
     import tty
@@ -158,10 +124,10 @@ def main():
         
         # Optimized display update
         if platform.system() == 'Windows':
-            if not hasattr(sys, 'windows_console'):
-                sys.windows_console = WindowsConsole()
-            console = sys.windows_console
-            console.write([header, body, footer])
+            clear_screen()
+            print(header, end="\r\n", flush=True)
+            print(body, end="\r\n", flush=True)
+            print(footer, end="", flush=True)  # No newline for last line
         else:
             # Use synchronized update on Unix
             string = "\x1b[?2026h\x1b[2J\x1b[H%s\n%s\n%s\x1b[?2026l" % (header,body,footer)
