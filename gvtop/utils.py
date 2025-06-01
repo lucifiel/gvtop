@@ -8,6 +8,13 @@ is_windows = platform.system() == 'Windows'
 
 if is_windows:
     import colorama
+    import ctypes
+    from ctypes import wintypes
+    
+    # Windows console handles
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    STD_OUTPUT_HANDLE = -11
+    hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
 else:
     import termios
     import tty
@@ -132,14 +139,16 @@ class GPUContainer(Container):
 
         super().__init__(foreground, background, header, content)
 
-def cleanup(fd, old_settings):
+def cleanup(fd, old_settings, mode=None):
     if old_settings is not None:  # Unix
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     # Exit alternate buffer (restores some settings)
     print("\x1b[?1049l", end="", flush=True)
 
-    if is_windows:
+    if is_windows and mode is not None:
+        # Restore original console mode
+        kernel32.SetConsoleMode(hOut, mode.value)
         colorama.deinit()
 
     nvmlShutdown()
