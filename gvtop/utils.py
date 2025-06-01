@@ -1,8 +1,10 @@
 import re
 import sys
-import termios
-import tty
 import math
+import platform
+if platform.system() != 'Windows':
+    import termios
+    import tty
 from pynvml import *
 
 pattern = re.compile(r"\x1b\[[0-9;]*m")
@@ -126,7 +128,8 @@ class GPUContainer(Container):
         super().__init__(foreground, background, header, content)
 
 def cleanup(fd, old_settings):
-    termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    if platform.system() != 'Windows' and old_settings:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     # Exit alternate buffer (restores some settings)
     print("\x1b[?1049l",end="",flush=True)
