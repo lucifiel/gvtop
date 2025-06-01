@@ -8,6 +8,7 @@ import platform
 from pynvml import *
 import psutil
 import datetime
+from .utils import windows_terminal
 from . import utils
 
 is_windows = platform.system() == 'Windows'
@@ -50,7 +51,7 @@ def main():
 
     if is_windows:
         old_settings = None
-        windows_terminal.setup()
+        utils.windows_terminal.setup()
         print("\x1b[?1049h\x1b[?25l", end="", flush=True)
     else:
         old_settings = termios.tcgetattr(fd)
