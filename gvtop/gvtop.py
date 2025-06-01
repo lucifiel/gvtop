@@ -138,7 +138,7 @@ def main():
                 if msvcrt.kbhit():
                     byte = msvcrt.getch()
                     if byte in [b"\x1b", b"q", b"\x03"]:
-                        utils.cleanup(fd, old_settings, mode)
+                        utils.cleanup(fd, old_settings, console_mode=mode)
             else:
                 if select.select([sys.stdin], [], [], 0)[0]:
                     byte = os.read(fd, 1)

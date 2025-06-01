@@ -139,17 +139,18 @@ class GPUContainer(Container):
 
         super().__init__(foreground, background, header, content)
 
-def cleanup(fd, old_settings, mode=None):
+def cleanup(fd, old_settings, console_mode=None):
     if old_settings is not None:  # Unix
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
     # Exit alternate buffer (restores some settings)
     print("\x1b[?1049l", end="", flush=True)
 
-    if is_windows and mode is not None:
-        # Restore original console mode
-        kernel32.SetConsoleMode(hOut, mode.value)
+    if is_windows:
         colorama.deinit()
+        if console_mode is not None:
+            # Restore original console mode
+            kernel32.SetConsoleMode(hOut, console_mode.value)
 
     nvmlShutdown()
     
