@@ -11,10 +11,24 @@ if is_windows:
     import ctypes
     from ctypes import wintypes
     
-    # Windows console handles
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    STD_OUTPUT_HANDLE = -11
-    hOut = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+    class WindowsTerminal:
+        def __init__(self):
+            self.kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+            STD_OUTPUT_HANDLE = -11
+            self.hOut = self.kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+            self.mode = wintypes.DWORD()
+            
+        def setup(self):
+            ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+            self.kernel32.GetConsoleMode(self.hOut, ctypes.byref(self.mode))
+            self.kernel32.SetConsoleMode(self.hOut,
+                                      self.mode.value | ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+            
+        def cleanup(self):
+            self.kernel32.SetConsoleMode(self.hOut, self.mode.value)
+            colorama.deinit()
+    
+    windows_terminal = WindowsTerminal()
 else:
     import termios
     import tty
@@ -139,7 +153,7 @@ class GPUContainer(Container):
 
         super().__init__(foreground, background, header, content)
 
-def cleanup(fd, old_settings, console_mode=None):
+def cleanup(fd, old_settings):
     if old_settings is not None:  # Unix
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
@@ -147,10 +161,7 @@ def cleanup(fd, old_settings, console_mode=None):
     print("\x1b[?1049l", end="", flush=True)
 
     if is_windows:
-        colorama.deinit()
-        if console_mode is not None:
-            # Restore original console mode
-            kernel32.SetConsoleMode(hOut, console_mode.value)
+        windows_terminal.cleanup()
 
     nvmlShutdown()
     

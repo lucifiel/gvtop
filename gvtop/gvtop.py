@@ -50,7 +50,7 @@ def main():
 
     if is_windows:
         old_settings = None
-        # Windows Terminal already supports alternate buffer
+        windows_terminal.setup()
         print("\x1b[?1049h\x1b[?25l", end="", flush=True)
     else:
         old_settings = termios.tcgetattr(fd)
