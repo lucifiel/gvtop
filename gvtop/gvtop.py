@@ -25,10 +25,14 @@ if platform.system() == 'Windows':
         def write(self, lines):
             """Write lines with minimal updates"""
             COORD = wintypes._COORD
+            # Clear screen first
+            self.kernel32.SetConsoleCursorPosition(self.handle, COORD(0, 0))
+            self.kernel32.FillConsoleOutputCharacterW(self.handle, ord(' '), 1000, COORD(0,0), None)
+            
+            # Write all lines with proper positioning
             for y, line in enumerate(lines):
-                if y >= len(self.prev_lines) or line != self.prev_lines[y]:
-                    self.kernel32.SetConsoleCursorPosition(self.handle, COORD(0, y))
-                    self.kernel32.WriteConsoleW(self.handle, line, len(line), None, None)
+                self.kernel32.SetConsoleCursorPosition(self.handle, COORD(0, y))
+                self.kernel32.WriteConsoleW(self.handle, line, len(line), None, None)
             self.prev_lines = lines.copy()
             
 else:
