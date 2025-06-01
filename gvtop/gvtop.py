@@ -13,10 +13,10 @@ term = Terminal()
 def update_screen(lines):
     """Cross-platform screen update with blessed"""
     with term.fullscreen(), term.hidden_cursor():
-        # Clear and print all lines
-        print(term.clear(), end='')
-        for line in lines:
-            print(line)
+        # Build complete frame first
+        frame = term.clear() + '\n'.join(lines)
+        # Single write operation
+        print(frame, end='', flush=True)
 
 def get_input(timeout):
     """Cross-platform input handling"""
