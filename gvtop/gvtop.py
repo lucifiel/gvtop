@@ -127,7 +127,8 @@ def main():
                 secs = elapsed%60
                 elapsed = "%02d:%02d:%02d" % (hours, mins, secs)
                 cmd = " ".join(proc.cmdline())
-                footer += "%4.4s %8.8s %8.8s %12.12s %8.8s %s\n" % (index, "%d GiB" % round(process.usedGpuMemory/2**30), process.pid, start, elapsed, cmd)
+                mem_usage = round(process.usedGpuMemory/2**30) if process.usedGpuMemory else 0
+                footer += "%4.4s %8.8s %8.8s %12.12s %8.8s %s\n" % (index, "%d GiB" % mem_usage, process.pid, start, elapsed, cmd)
         # Delete final new line
         footer = footer[:-1]
         
