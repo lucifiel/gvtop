@@ -10,6 +10,13 @@ if platform.system() == 'Windows':
 else:
     import termios
     import tty
+
+def clear_screen():
+    """Platform-specific screen clearing"""
+    if platform.system() == 'Windows':
+        os.system('cls')
+    else:
+        print("\x1b[2J\x1b[H", end="", flush=True)
 from pynvml import *
 import psutil
 import datetime
@@ -115,13 +122,16 @@ def main():
         # Delete final new line
         footer = footer[:-1]
         
-        # Begin Synchronized Update, clear screen, cursor home, End Synchronized Update
-        string = "\x1b[?2026h\x1b[2J\x1b[H%s\n%s\n%s\x1b[?2026l" % (header,body,footer)
+        # Optimized display update
         if platform.system() == 'Windows':
-            print(string,end="",flush=True)  # Windows Terminal handles \n properly
+            clear_screen()
+            print(header, end="\r\n", flush=True)
+            print(body, end="\r\n", flush=True)
+            print(footer, end="", flush=True)  # No newline for last line
         else:
-            # string contains \n, which in raw mode are not converted to \r\n
-            print(string.replace("\n","\r\n"),end="",flush=True)
+            # Use synchronized update on Unix
+            string = "\x1b[?2026h\x1b[2J\x1b[H%s\n%s\n%s\x1b[?2026l" % (header,body,footer)
+            print(string.replace("\n","\r\n"), end="", flush=True)
 
         start = time.time()
         while time.time()-start < args.interval:
