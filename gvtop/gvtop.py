@@ -69,17 +69,26 @@ def main():
     args=parser.parse_args()
 
     gpu_monitor = None
+    nvml_initialized = False
+    
     if platform.system() == 'Windows':
         try:
             gpu_monitor = WindowsGpuMonitor()
-        except:
-            print("Warning: Could not initialize WMI GPU monitoring")
-    else:
-        try:
-            nvmlInit()
-        except:
-            print("Could not initialize NVML. Sorry 🥺...")
-            exit(1)
+        except Exception as e:
+            print(f"Warning: Could not initialize WMI GPU monitoring: {str(e)}")
+    
+    # Try NVML initialization for all platforms
+    try:
+        nvmlInit()
+        nvml_initialized = True
+    except pynvml.NVMLError_Unitialized:
+        print("Warning: NVML not initialized - GPU monitoring limited")
+    except Exception as e:
+        print(f"Warning: NVML initialization failed: {str(e)}")
+    
+    if platform.system() != 'Windows' and not nvml_initialized and not gpu_monitor:
+        print("Error: No GPU monitoring available")
+        exit(1)
 
     GEM = os.getenv("GEM", "emerald")
     THEME = importlib.import_module("gvtop.themes."+GEM).THEME
@@ -108,11 +117,18 @@ def main():
         
         # Get GPU info from appropriate source
         if platform.system() == 'Windows' and gpu_monitor:
-            gpu_name = gpu_monitor.gpu_info['name']
-            gpu_mem = gpu_monitor.gpu_info['memory']
-        else:
+            try:
+                gpu_name = gpu_monitor.gpu_info['name']
+                gpu_mem = gpu_monitor.gpu_info['memory']
+            except:
+                gpu_name = "Unknown GPU"
+                gpu_mem = 0
+        elif nvml_initialized:
             gpu_name = device_name
             gpu_mem = total_mem
+        else:
+            gpu_name = "GPU Monitoring Unavailable"
+            gpu_mem = 0
             
         icon = lambda x: "\x1b[38;2;%sm%s\x1b[39m" % (SCHEME["primary"], x)
         key = lambda x: "\x1b[38;2;%s;49m▐\x1b[38;2;%s;48;2;%sm%s\x1b[38;2;%s;49m▌\x1b[39;49m" % (SCHEME["error"],SCHEME["onError"],SCHEME["error"],x,SCHEME["error"])
