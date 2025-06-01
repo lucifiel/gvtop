@@ -2,29 +2,54 @@ import argparse
 import importlib
 import time
 import os
-from blessed import Terminal
+import urwid
 from pynvml import *
 import psutil
 import datetime
 from . import utils
 
-term = Terminal()
+class GVTopUI:
+    def __init__(self):
+        self.palette = [
+            ('header', 'black', 'light gray'),
+            ('body', 'light gray', 'black'),
+            ('footer', 'dark red', 'black')
+        ]
+        self.header_text = urwid.Text("")
+        self.body_text = urwid.Text("")
+        self.footer_text = urwid.Text("")
+        self.layout = urwid.Frame(
+            header=urwid.AttrMap(self.header_text, 'header'),
+            body=urwid.AttrMap(self.body_text, 'body'),
+            footer=urwid.AttrMap(self.footer_text, 'footer')
+        )
+        self.loop = None
 
-def update_screen(lines):
-    """Cross-platform screen update with blessed"""
-    with term.fullscreen(), term.hidden_cursor():
-        # Build complete frame first
-        frame = term.clear() + '\n'.join(lines)
-        # Single write operation
-        print(frame, end='', flush=True)
+    def update_screen(self, header, body, footer):
+        self.header_text.set_text(header)
+        self.body_text.set_text(body)
+        self.footer_text.set_text(footer)
+        if self.loop:
+            self.loop.draw_screen()
 
-def get_input(timeout):
-    """Cross-platform input handling"""
-    with term.cbreak():
-        inp = term.inkey(timeout=timeout)
-        if inp in ('\x1b', 'q', '\x03'):  # ESC, q, CTRL+C
-            return True
-    return False
+    def run(self, interval, update_callback):
+        def input_handler(key):
+            if key in ('esc', 'q', 'ctrl c'):
+                raise urwid.ExitMainLoop()
+
+        self.loop = urwid.MainLoop(
+            self.layout,
+            self.palette,
+            unhandled_input=input_handler,
+            handle_mouse=False
+        )
+        
+        def refresh(loop, data):
+            update_callback()
+            loop.set_alarm_in(interval, refresh)
+
+        self.loop.set_alarm_in(interval, refresh)
+        self.loop.run()
 from pynvml import *
 import psutil
 import datetime
