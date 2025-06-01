@@ -11,6 +11,7 @@ import datetime
 from . import utils
 
 is_windows = platform.system() == 'Windows'
+mode = None  # Initialize mode variable for both platforms
 
 if is_windows:
     import colorama
