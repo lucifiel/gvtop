@@ -7,8 +7,30 @@ import os
 import platform
 if platform.system() == 'Windows':
     import msvcrt
-    # Windows line-diff buffer
-    prev_lines = []
+    import ctypes
+    from ctypes import wintypes
+    
+    class WindowsConsole:
+        def __init__(self):
+            self.kernel32 = ctypes.windll.kernel32
+            self.handle = self.kernel32.GetStdHandle(-11)
+            self.prev_lines = []
+            self._setup_console()
+            
+        def _setup_console(self):
+            # Enable ANSI and virtual terminal processing
+            ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+            self.kernel32.SetConsoleMode(self.handle, ENABLE_VIRTUAL_TERMINAL_PROCESSING)
+            
+        def write(self, lines):
+            """Write lines with minimal updates"""
+            COORD = wintypes._COORD
+            for y, line in enumerate(lines):
+                if y >= len(self.prev_lines) or line != self.prev_lines[y]:
+                    self.kernel32.SetConsoleCursorPosition(self.handle, COORD(0, y))
+                    self.kernel32.WriteConsoleW(self.handle, line, len(line), None, None)
+            self.prev_lines = lines.copy()
+            
 else:
     import termios
     import tty
@@ -16,12 +38,9 @@ else:
 def update_screen(lines):
     """Smart screen update with line diffing"""
     if platform.system() == 'Windows':
-        global prev_lines
-        for y, line in enumerate(lines):
-            if y >= len(prev_lines) or line != prev_lines[y]:
-                # Move cursor and print line
-                print(f"\x1b[{y+1}H{line}", end="", flush=True)
-        prev_lines = lines.copy()
+        if not hasattr(sys, 'windows_console'):
+            sys.windows_console = WindowsConsole()
+        sys.windows_console.write(lines)
     else:
         # Unix synchronized update
         print("\x1b[?2026h\x1b[H" + "\n".join(lines) + "\x1b[?2026l",
