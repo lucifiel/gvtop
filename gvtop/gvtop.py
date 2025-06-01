@@ -176,7 +176,7 @@ def main():
         
         # Smart display update
         screen_lines = [header, body, footer]
-        update_screen(screen_lines)
+        self.update_screen(*screen_lines)
 
         start = time.time()
         while time.time()-start < args.interval:
