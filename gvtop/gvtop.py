@@ -1,110 +1,38 @@
 import argparse
 import importlib
-import time
-import os
-import platform
 import sys
+import termios
+import tty
+import time
+import select
+import os
 from pynvml import *
 import psutil
 import datetime
 from . import utils
-from .windows_terminal import get_terminal, WindowsGpuMonitor
-
-def get_input(timeout):
-    """Platform-independent input handling"""
-    if platform.system() == 'Windows':
-        import msvcrt
-        if msvcrt.kbhit():
-            return msvcrt.getch()
-    else:
-        import select
-        import sys
-        if select.select([sys.stdin], [], [], timeout)[0]:
-            return sys.stdin.read(1)
-    return None
-
-class GVTopUI:
-    def __init__(self):
-        self.palette = [
-            ('header', 'black', 'light gray'),
-            ('body', 'light gray', 'black'),
-            ('footer', 'dark red', 'black')
-        ]
-        self.header_text = urwid.Text("")
-        self.body_text = urwid.Text("")
-        self.footer_text = urwid.Text("")
-        self.layout = urwid.Frame(
-            header=urwid.AttrMap(self.header_text, 'header'),
-            body=urwid.AttrMap(self.body_text, 'body'),
-            footer=urwid.AttrMap(self.footer_text, 'footer')
-        )
-        self.loop = None
-
-    def update_screen(self, header, body, footer):
-        """Update screen using platform-appropriate method"""
-        if platform.system() == 'Windows':
-            term = get_terminal()
-            with term.fullscreen(), term.hidden_cursor():
-                print(term.clear(), end='')
-                print(header + body + footer, end='', flush=True)
-        else:
-            self.header_text.set_text(header)
-            self.body_text.set_text(body)
-            self.footer_text.set_text(footer)
-            if self.loop:
-                self.loop.draw_screen()
-
-    def run(self, interval, update_callback):
-        def input_handler(key):
-            if key in ('esc', 'q', 'ctrl c'):
-                raise urwid.ExitMainLoop()
-
-        self.loop = urwid.MainLoop(
-            self.layout,
-            self.palette,
-            unhandled_input=input_handler,
-            handle_mouse=False
-        )
-        
-        def refresh(loop, data):
-            update_callback()
-            loop.set_alarm_in(interval, refresh)
-
-        self.loop.set_alarm_in(interval, refresh)
-        self.loop.run()
 
 def main():
-    ui = GVTopUI()
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--interval", help="Seconds between updates", type=int, default=1)
     args=parser.parse_args()
 
-    gpu_monitor = None
-    nvml_initialized = False
-    
-    if platform.system() == 'Windows':
-        try:
-            gpu_monitor = WindowsGpuMonitor()
-        except Exception as e:
-            print(f"Warning: Could not initialize WMI GPU monitoring: {str(e)}")
-    
-    # Try NVML initialization for all platforms
     try:
         nvmlInit()
-        nvml_initialized = True
-    except pynvml.NVMLError_Unitialized:
-        print("Warning: NVML not initialized - GPU monitoring limited")
-    except Exception as e:
-        print(f"Warning: NVML initialization failed: {str(e)}")
-    
-    if platform.system() != 'Windows' and not nvml_initialized and not gpu_monitor:
-        print("Error: No GPU monitoring available")
+    except:
+        print("Could not initialize NVML. Sorry 🥺...")
         exit(1)
 
     GEM = os.getenv("GEM", "emerald")
     THEME = importlib.import_module("gvtop.themes."+GEM).THEME
 
-    # Enter alternate buffer and hide cursor handled by blessed
+    fd = sys.stdin.fileno()
+
+    old_settings = termios.tcgetattr(fd)
+        
+    # Enter alternate buffer and hide cursor
+    print("\x1b[?1049h\x1b[?25l",end="",flush=True)
+
+    tty.setraw(fd)
 
     cuda = str(nvmlSystemGetCudaDriverVersion_v2())
     major = int(cuda[:2])
@@ -122,34 +50,25 @@ def main():
     max_power = round(nvmlDeviceGetEnforcedPowerLimit(handles[0])/1000)
 
     while True:
-        # Default to dark mode
-        mode = "dark"
+        # Dark mode ANSI DSR (https://contour-terminal.org/vt-extensions/color-palette-update-notifications/)
+        print("\x1b[?996n",end="",flush=True)
+        response = os.read(fd, 9)
+        if response==b"\x1b[?997;1n":
+            mode="dark"
+        elif response==b"\x1b[?997;2n":
+            mode="light"
+
         SCHEME = THEME[mode]
         
-        # Get GPU info from appropriate source
-        if platform.system() == 'Windows' and gpu_monitor:
-            try:
-                gpu_name = gpu_monitor.gpu_info['name']
-                gpu_mem = gpu_monitor.gpu_info['memory']
-            except:
-                gpu_name = "Unknown GPU"
-                gpu_mem = 0
-        elif nvml_initialized:
-            gpu_name = device_name
-            gpu_mem = total_mem
-        else:
-            gpu_name = "GPU Monitoring Unavailable"
-            gpu_mem = 0
-            
         icon = lambda x: "\x1b[38;2;%sm%s\x1b[39m" % (SCHEME["primary"], x)
         key = lambda x: "\x1b[38;2;%s;49m▐\x1b[38;2;%s;48;2;%sm%s\x1b[38;2;%s;49m▌\x1b[39;49m" % (SCHEME["error"],SCHEME["onError"],SCHEME["error"],x,SCHEME["error"])
-        first_line = '\x1b[38;2;%s;1m%s\x1b[39;22m' % (SCHEME["secondary"],gpu_name)
+        first_line = '\x1b[38;2;%s;1m%s\x1b[39;22m' % (SCHEME["secondary"],device_name)
         tip = "Close with%s/%s/%s+%s" % (key("ESC"),key("q"),key("CTRL"),key("c"))
         extra_spaces = os.get_terminal_size().columns - utils.ansi_len(first_line) - utils.ansi_len(tip)
         first_line = first_line + " "*extra_spaces + tip + "\n"
         header = (first_line +
                   '%s Cores: %8.8s\n' % (icon(" "),cuda_cores)+
-                  '%s  Mem.: %8.8s\n' % (icon(" "),"%d GiB" % gpu_mem) +
+                  '%s  Mem.: %8.8s\n' % (icon(" "),"%d GiB" % total_mem) +
                   '%s  Pow.: %8.8s\n' % (icon(" "),"%d W" % max_power) +
                   '%s  CUDA: %8.8s' % (icon(" "),"≤ %d.%d" % (major,minor)))
         
@@ -180,22 +99,23 @@ def main():
                 secs = elapsed%60
                 elapsed = "%02d:%02d:%02d" % (hours, mins, secs)
                 cmd = " ".join(proc.cmdline())
-                mem_usage = round(process.usedGpuMemory/2**30) if process.usedGpuMemory else 0
-                footer += "%4.4s %8.8s %8.8s %12.12s %8.8s %s\n" % (index, "%d GiB" % mem_usage, process.pid, start, elapsed, cmd)
+                footer += "%4.4s %8.8s %8.8s %12.12s %8.8s %s\n" % (index, "%d GiB" % round(process.usedGpuMemory/2**30), process.pid, start, elapsed, cmd)
         # Delete final new line
         footer = footer[:-1]
         
-        # Smart display update
-        screen_lines = [header, body, footer]
-        ui.update_screen(*screen_lines)
+        # Begin Synchronized Update, clear screen, cursor home, End Synchronized Update
+        string = "\x1b[?2026h\x1b[2J\x1b[H%s\n%s\n%s\x1b[?2026l" % (header,body,footer)
+        # string contains \n, which in raw mode are not converted to \r\n
+        print(string.replace("\n","\r\n"),end="",flush=True)
 
         start = time.time()
         while time.time()-start < args.interval:
-            if get_input(args.interval - (time.time()-start)):
-                if nvml_initialized:
-                    nvmlShutdown()
-                utils.cleanup()
-                break
+            # rlist, wlist, xlist=select.select(rlist, wlist, xlist, timeout=None/blocking)
+            if select.select([sys.stdin], [], [], 0)[0]:
+                byte = os.read(fd, 1)
+                # CTRL+c=3/ETX
+                if byte in [b"\x1b", b"q", b"\x03"]:
+                    utils.cleanup(fd, old_settings)
 
 if __name__ == "__main__":
     main()

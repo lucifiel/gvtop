@@ -4,10 +4,7 @@ version = "0.0.1"
 description = "🎮 Material You TUI for monitoring NVIDIA GPUs"
 dependencies = [
     "pynvml",
-    "psutil",
-    "urwid",
-    "wmi; platform_system == 'Windows'",
-    "blessed; platform_system != 'Windows'",
+    "psutil"
 ]
 
 [build-system]
