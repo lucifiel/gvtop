@@ -74,6 +74,7 @@ class GVTopUI:
         self.loop.run()
 
 def main():
+    ui = GVTopUI()
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument("--interval", help="Seconds between updates", type=int, default=1)
     args=parser.parse_args()
@@ -186,7 +187,7 @@ def main():
         
         # Smart display update
         screen_lines = [header, body, footer]
-        self.update_screen(*screen_lines)
+        ui.update_screen(*screen_lines)
 
         start = time.time()
         while time.time()-start < args.interval:
