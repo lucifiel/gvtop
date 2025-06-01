@@ -55,15 +55,23 @@ def main():
     max_power = round(nvmlDeviceGetEnforcedPowerLimit(handles[0])/1000)
 
     while True:
-        # Dark mode ANSI DSR (https://contour-terminal.org/vt-extensions/color-palette-update-notifications/)
-        print("\x1b[?996n",end="",flush=True)
-        response = os.read(fd, 9)
-        if response==b"\x1b[?997;1n":
-            mode="dark"
-        elif response==b"\x1b[?997;2n":
-            mode="light"
+        if platform.system() == 'Windows':
+            # Default to dark mode on Windows
+            mode = "dark"
+        else:
+            # Dark mode ANSI DSR (https://contour-terminal.org/vt-extensions/color-palette-update-notifications/)
+            print("\x1b[?996n",end="",flush=True)
+            response = os.read(fd, 9)
+            if response==b"\x1b[?997;1n":
+                mode="dark"
+            elif response==b"\x1b[?997;2n":
+                mode="light"
 
         SCHEME = THEME[mode]
+        
+        # Windows Terminal initialization
+        if platform.system() == 'Windows':
+            os.system('')  # Enable ANSI escape sequences
         
         icon = lambda x: "\x1b[38;2;%sm%s\x1b[39m" % (SCHEME["primary"], x)
         key = lambda x: "\x1b[38;2;%s;49m▐\x1b[38;2;%s;48;2;%sm%s\x1b[38;2;%s;49m▌\x1b[39;49m" % (SCHEME["error"],SCHEME["onError"],SCHEME["error"],x,SCHEME["error"])
@@ -110,8 +118,11 @@ def main():
         
         # Begin Synchronized Update, clear screen, cursor home, End Synchronized Update
         string = "\x1b[?2026h\x1b[2J\x1b[H%s\n%s\n%s\x1b[?2026l" % (header,body,footer)
-        # string contains \n, which in raw mode are not converted to \r\n
-        print(string.replace("\n","\r\n"),end="",flush=True)
+        if platform.system() == 'Windows':
+            print(string,end="",flush=True)  # Windows Terminal handles \n properly
+        else:
+            # string contains \n, which in raw mode are not converted to \r\n
+            print(string.replace("\n","\r\n"),end="",flush=True)
 
         start = time.time()
         while time.time()-start < args.interval:
