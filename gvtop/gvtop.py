@@ -4,51 +4,17 @@ import sys
 import time
 import select
 import os
-import platform
-if platform.system() == 'Windows':
-    import msvcrt
-    import ctypes
-    from ctypes import wintypes
-    
-    class WindowsConsole:
-        def __init__(self):
-            self.kernel32 = ctypes.windll.kernel32
-            self.handle = self.kernel32.GetStdHandle(-11)
-            self.prev_lines = []
-            self._setup_console()
-            
-        def _setup_console(self):
-            # Enable ANSI and virtual terminal processing
-            ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-            self.kernel32.SetConsoleMode(self.handle, ENABLE_VIRTUAL_TERMINAL_PROCESSING)
-            
-        def write(self, lines):
-            """Write lines with minimal updates"""
-            COORD = wintypes._COORD
-            # Clear screen first
-            self.kernel32.SetConsoleCursorPosition(self.handle, COORD(0, 0))
-            self.kernel32.FillConsoleOutputCharacterW(self.handle, ord(' '), 1000, COORD(0,0), None)
-            
-            # Write all lines with proper positioning
-            for y, line in enumerate(lines):
-                self.kernel32.SetConsoleCursorPosition(self.handle, COORD(0, y))
-                self.kernel32.WriteConsoleW(self.handle, line, len(line), None, None)
-            self.prev_lines = lines.copy()
-            
-else:
-    import termios
-    import tty
+from blessed import Terminal
+
+term = Terminal()
 
 def update_screen(lines):
-    """Smart screen update with line diffing"""
-    if platform.system() == 'Windows':
-        if not hasattr(sys, 'windows_console'):
-            sys.windows_console = WindowsConsole()
-        sys.windows_console.write(lines)
-    else:
-        # Unix synchronized update
-        print("\x1b[?2026h\x1b[H" + "\n".join(lines) + "\x1b[?2026l",
-              end="", flush=True)
+    """Cross-platform screen update with blessed"""
+    with term.fullscreen(), term.hidden_cursor():
+        # Clear and print all lines
+        print(term.clear(), end='')
+        for line in lines:
+            print(line)
 from pynvml import *
 import psutil
 import datetime
